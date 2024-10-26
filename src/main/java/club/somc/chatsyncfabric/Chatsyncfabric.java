@@ -1,5 +1,12 @@
 package club.somc.chatsyncfabric;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.protobuf.InvalidProtocolBufferException;
+import club.somc.protos.minecraft.MessageSent;
+import club.somc.protos.minecraft.PlayerDied;
+import club.somc.protos.minecraft.PlayerJoined;
+import club.somc.protos.minecraft.PlayerQuit;
 import io.nats.client.Connection;
 import io.nats.client.Dispatcher;
 import io.nats.client.Nats;
@@ -8,13 +15,18 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 
 public class Chatsyncfabric implements ModInitializer {
 
+    private static MinecraftServer SERVER;
     private Connection natsConnection;
     private String serverName;
     private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("chatsync.json");
@@ -36,6 +48,11 @@ public class Chatsyncfabric implements ModInitializer {
         // Set up NATS message dispatcher
         setupNatsDispatcher();
 
+
+        ServerLifecycleEvents.SERVER_STARTING.register(server -> {
+            SERVER = server;
+        });
+
         // Handle server shutdown
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             try {
@@ -53,27 +70,27 @@ public class Chatsyncfabric implements ModInitializer {
             try {
                 switch (msg.getSubject()) {
                     case "minecraft.chat.message_sent" -> {
-                        MinecraftMessageSent event = MinecraftMessageSent.parseFrom(msg.getData());
+                        MessageSent event = MessageSent.parseFrom(msg.getData());
                         if (!event.getServerName().equals(serverName)) {
                             broadcastMessage(Text.literal("<" + event.getPlayerName() + "> " + event.getMessage()));
                         }
                     }
                     case "minecraft.player.joined" -> {
-                        MinecraftPlayerJoined event = MinecraftPlayerJoined.parseFrom(msg.getData());
+                        PlayerJoined event = PlayerJoined.parseFrom(msg.getData());
                         if (!event.getServerName().equals(serverName)) {
                             broadcastMessage(Text.literal(event.getPlayerName() + " joined server " + event.getServerName())
                                     .formatted(Formatting.YELLOW));
                         }
                     }
                     case "minecraft.player.quit" -> {
-                        MinecraftPlayerQuit event = MinecraftPlayerQuit.parseFrom(msg.getData());
+                        PlayerQuit event = PlayerQuit.parseFrom(msg.getData());
                         if (!event.getServerName().equals(serverName)) {
                             broadcastMessage(Text.literal(event.getPlayerName() + " left server " + event.getServerName())
                                     .formatted(Formatting.YELLOW));
                         }
                     }
                     case "minecraft.player.died" -> {
-                        MinecraftPlayerDied event = MinecraftPlayerDied.parseFrom(msg.getData());
+                        PlayerDied event = PlayerDied.parseFrom(msg.getData());
                         if (!event.getServerName().equals(serverName)) {
                             broadcastMessage(Text.literal(event.getDeathMessage()).formatted(Formatting.RED));
                         }
@@ -91,9 +108,9 @@ public class Chatsyncfabric implements ModInitializer {
     }
 
     private void broadcastMessage(Text message) {
-        if (MinecraftServer.getServer() != null) {
-            MinecraftServer.getServer().execute(() ->
-                    MinecraftServer.getServer().getPlayerManager().broadcast(message, false));
+        if (SERVER != null) {
+            SERVER.execute(() ->
+                    SERVER.getPlayerManager().broadcast(message, false));
         }
     }
 

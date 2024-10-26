@@ -1,6 +1,7 @@
 plugins {
     id 'fabric-loom' version '1.8-SNAPSHOT'
     id 'maven-publish'
+    id 'com.google.protobuf' version '0.9.4'
 }
 
 version = project.mod_version
@@ -19,6 +20,17 @@ loom {
             sourceSet sourceSets.client
         }
     }
+
+    runs {
+        client {
+            client()
+            setSource(sourceSets.main)
+        }
+        server {
+            server()
+            setSource(sourceSets.main)
+        }
+    }
 }
 
 repositories {
@@ -27,6 +39,7 @@ repositories {
     // Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
     // See https://docs.gradle.org/current/userguide/declaring_repositories.html
     // for more information about repositories.
+    mavenCentral()
 }
 
 dependencies {
@@ -40,8 +53,41 @@ dependencies {
     implementation 'io.nats:jnats:2.16.14'
     include 'io.nats:jnats:2.16.14'
 
-    implementation 'com.google.protobuf:protobuf-java:3.24.0'
-    include 'com.google.protobuf:protobuf-java:3.24.0'
+    implementation 'com.google.protobuf:protobuf-java:3.25.0'
+    include 'com.google.protobuf:protobuf-java:3.25.0'
+}
+
+def generatedFilesDir = 'build/generated/source/proto/main/java'
+
+protobuf {
+    protoc {
+        artifact = 'com.google.protobuf:protoc:3.25.0'
+    }
+    /*generateProtoTasks {
+        all()*.plugins {
+            java {}
+        }
+    }*/
+    //generatedFilesBaseDir = generatedFilesDir
+    clean {
+        delete generatedFilesDir
+    }
+}
+
+tasks.withType(Copy) {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+
+sourceSets {
+    main {
+        java {
+            //srcDirs += 'build/generated/source/proto/main/java'
+            srcDirs += project.file(generatedFilesDir)
+        }
+        proto {
+            srcDir 'src/main/proto'
+        }
+    }
 }
 
 processResources {
